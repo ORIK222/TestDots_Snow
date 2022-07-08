@@ -1,0 +1,105 @@
+{
+  "version": null,
+  "chainId": 0,
+  "collections": [
+    {
+      "collection": {
+        "title": "default",
+        "cover": "url",
+        "icon": "url"
+      },
+      "artworks": [
+        {
+          "title": "Aqua Tiger",
+          "price": 12.0,
+          "priceType": "ETH",
+          "creator": {
+            "name": "Kudo Albus",
+            "description": "VR artist. TiltBrush show creator for HTC VIVE in 2017. Provide MultiBrush tutorials for the Pico VR user community.",
+            "urls": {
+              "picture": "url",
+              "twitter": "url",
+              "instagram": "url",
+              "discord": "url"
+            }
+          },
+          "owner": null,
+          "description": "VR artist. TiltBrush show creator for HTC VIVE in 2017. Provide MultiBrush tutorials for the Pico VR user community.",
+          "originFileGenerator": null,
+          "objectData": null,
+          "urls": {
+            "glb": null,
+            "glb-gz": null,
+            "thumbnail": null,
+            "glb-sha256": null,
+            "glb-gz-sha256": null,
+            "cashedGlbUrl": "DefaultCollection\\Aqua Tiger\\Aqua Tiger.glb",
+            "cashedIconUrl": "DefaultCollection\\Aqua Tiger\\Icon\\Preview"
+          },
+          "environments": null,
+          "purchaseTransactionData": null
+        },
+        {
+          "title": "Busto Costume Tradizionale",
+          "price": 12.0,
+          "priceType": "ETH",
+          "creator": {
+            "name": "Giuseppe Delogu",
+            "description": "",
+            "urls": {
+              "picture": "url",
+              "twitter": "giuseppedelogu",
+              "instagram": "giuseppe_delogu___",
+              "discord": "url"
+            }
+          },
+          "owner": null,
+          "description": "Busto Costume Tradizionale",
+          "originFileGenerator": null,
+          "objectData": null,
+          "urls": {
+            "glb": null,
+            "glb-gz": null,
+            "thumbnail": null,
+            "glb-sha256": null,
+            "glb-gz-sha256": null,
+            "cashedGlbUrl": "DefaultCollection\\Busto Costume Tradizionale\\Busto Costume Tradizionale.glb",
+            "cashedIconUrl": "DefaultCollection\\Busto Costume Tradizionale\\Icon\\Preview"
+          },
+          "environments": null,
+          "purchaseTransactionData": null
+        },
+        {
+          "title": "Busto Costume Tradizionale",
+          "price": 12.0,
+          "priceType": "ETH",
+          "creator": {
+            "name": "Giuseppe Delogu",
+            "description": "",
+            "urls": {
+              "picture": "url",
+              "twitter": "giuseppedelogu",
+              "instagram": "giuseppe_delogu___",
+              "discord": "url"
+            }
+          },
+          "owner": null,
+          "description": "Busto Costume Tradizionale",
+          "originFileGenerator": null,
+          "objectData": null,
+          "urls": {
+            "glb": null,
+            "glb-gz": null,
+            "thumbnail": null,
+            "glb-sha256": null,
+            "glb-gz-sha256": null,
+            "cashedGlbUrl": "DefaultCollection\\OrikTest\\OrikTest.glb",
+            "cashedIconUrl": "DefaultCollection\\OrikTest\\Icon\\Preview"
+          },
+          "environments": null,
+          "purchaseTransactionData": null
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "title": "Busto Costume Tradizionale",
+  "price": 12.0,
+  "priceType": "ETH",
+  "creator": {
+    "name": "Giuseppe Delogu",
+    "description": "",
+    "urls": {
+      "picture": "url",
+      "twitter": "giuseppedelogu",
+      "instagram": "giuseppe_delogu___",
+      "discord": "url"
+    }
+  },
+  "owner": null,
+  "description": "Busto Costume Tradizionale",
+  "urls": {
+    "cashedGlbUrl": "DefaultCollection/Busto Costume Tradizionale/Busto Costume Tradizionale.glb",
+    "cashedIconUrl": "DefaultCollection/Busto Costume Tradizionale/Icon/Preview.png"
+  }
+}

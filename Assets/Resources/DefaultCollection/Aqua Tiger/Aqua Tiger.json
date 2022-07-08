@@ -1,0 +1,21 @@
+{
+  "title": "Aqua Tiger",
+  "price": 12.0,
+  "priceType": "ETH",
+  "creator": {
+    "name": "Kudo Albus",
+    "description": "VR artist. TiltBrush show creator for HTC VIVE in 2017. Provide MultiBrush tutorials for the Pico VR user community.",
+    "urls": {
+      "picture": "url",
+      "twitter": "url",
+      "instagram": "url",
+      "discord": "url"
+    }
+  },
+  "owner": null,
+  "description": "VR artist. TiltBrush show creator for HTC VIVE in 2017. Provide MultiBrush tutorials for the Pico VR user community.",
+  "urls": {
+    "cashedGlbUrl": "DefaultCollection/Aqua Tiger/Aqua Tiger.glb",
+    "cashedIconUrl": "DefaultCollection/Aqua Tiger/Icon/Preview.png"
+  }
+}
