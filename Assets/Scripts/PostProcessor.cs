@@ -12,7 +12,8 @@ namespace Download.Core
         
         public void OnPostprocessBuild(BuildReport report)
         {
-            RuntimeControl.Instance.SetLastControl();   
+            if(RuntimeControl.Instance)
+                RuntimeControl.Instance.SetLastControl();   
         }
     }
 }

@@ -1,11 +1,10 @@
 using System;
-using System.Collections.Generic;
+using System.Collections;
 using System.IO;
 using Newtonsoft.Json;
 using UnityEngine;
 using Download.Core.Editor;
 using DataModels;
-using Download.Core;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
@@ -25,17 +24,30 @@ public class LocalTestDownload : MonoBehaviour
     
     private string _state;
     
-    private void OnEnable()
+    private void Start()
     {
-        UpdateJson("default");
         _entityManager = World.DefaultGameObjectInjectionWorld.EntityManager;
         _blobAssetStore = new BlobAssetStore();
+
+        StartCoroutine(Init());
     }
 
-    public  void UpdateJson(string state)
+    IEnumerator Init()
     {
-        if (_modelObject)
-            Destroy(_modelObject);
+        yield return new WaitForSeconds(20);
+        UpdateJson("default");
+        yield return new WaitForSeconds(10);
+        UpdateJson("old");
+        yield return new WaitForSeconds(10);
+        UpdateJson("new");
+    }
+    
+
+    public void UpdateJson(string state)
+    {
+        // if (_modelObject)
+        //     Destroy(_modelObject);
+        
         _state = state;
         var localJson = Resources.Load<TextAsset>("Collections holder").text;
         CollectionsHolder collectionsHolder = JsonConvert.DeserializeObject<CollectionsHolder>(localJson);
@@ -46,8 +58,6 @@ public class LocalTestDownload : MonoBehaviour
         print("Cashed data: " + model.CashedData);
         
         LoadModel(model);
-        
-        
     }
     private static string GetPathToFileOfExtension(FileInfo[] filesInfo, string extension, string directoriesName,bool fileWithoutExtension = true)
     {

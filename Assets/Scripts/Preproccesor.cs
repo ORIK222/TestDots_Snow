@@ -20,7 +20,8 @@ public class Preproccesor : IPreprocessBuildWithReport
         }
         
         //Set up RuntimeControll script
-        RuntimeControl.Instance.SetVrControl();
+        if(RuntimeControl.Instance)
+            RuntimeControl.Instance.SetVrControl();
     }
 }
 
