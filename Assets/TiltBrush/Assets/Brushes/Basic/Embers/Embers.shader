@@ -33,21 +33,28 @@ Category {
   SubShader {
     Pass {
 
-      HLSLPROGRAM
+      CGPROGRAM
       #pragma vertex vert
       #pragma fragment frag
-      #pragma exclude_renderers gles gles3 glcore
-      #pragma target 4.5
-      #pragma multi_compile_instancing
-      #pragma instancing_options renderinglayer
-      #pragma multi_compile _ DOTS_INSTANCING_ON
-      #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
-      #include "../../../Shaders/Include/Brush.hlsl"
-      #include "../../../Shaders/Include/Particles.hlsl"
-      
-CBUFFER_START(UnityPerMaterial)
+      #pragma multi_compile_particles
+      #pragma multi_compile __ AUDIO_REACTIVE
+      #pragma multi_compile __ TBT_LINEAR_TARGET
+      #pragma target 3.0
+
+      #include "UnityCG.cginc"
+      #include "../../../Shaders/Include/Brush.cginc"
+      #include "../../../Shaders/Include/Particles.cginc"
+      #include "Assets/ThirdParty/Noise/Shaders/Noise.cginc"
+
       sampler2D _MainTex;
-      half4 _TintColor;
+      fixed4 _TintColor;
+
+      struct v2f {
+        float4 vertex : SV_POSITION;
+        fixed4 color : COLOR;
+        float2 texcoord : TEXCOORD0;
+      };
+
       float4 _MainTex_ST;
       float _ScrollRate;
       // In decimeters
@@ -56,15 +63,6 @@ CBUFFER_START(UnityPerMaterial)
       float _ScrollJitterIntensity;
       float _ScrollJitterFrequency;
       float _SpreadRate;
-      CBUFFER_END
-      
-      struct v2f {
-        float4 vertex : SV_POSITION;
-        half4 color : COLOR;
-        float2 texcoord : TEXCOORD0;
-      };
-
-
 
       // pos and seed should be stable values.
       // seed is a value in [0, 1]
@@ -79,8 +77,13 @@ CBUFFER_START(UnityPerMaterial)
         dispVec.x += sin(t01 * _ScrollJitterFrequency + seed * 100 + t2 + pos.z) * _ScrollJitterIntensity;
         dispVec.y += (fmod(seed * 100, 1) - 0.5) * _ScrollDistance.y * t01;
         dispVec.z += cos(t01 * _ScrollJitterFrequency + seed * 100 + t2 + pos.x) * _ScrollJitterIntensity;
+
+#ifdef AUDIO_REACTIVE
+        float fft = (tex2Dlod(_FFTTex, float4(pos.y,0,0,0)).b)*2 + .1;
+        dispVec.y += fft;
+#endif
         // Allow scaling to affect particle speed and distance in toolkit
-        return dispVec.xyz * kDecimetersToWorldUnits  * length(unity_ObjectToWorld[0].xyz);
+        return dispVec * kDecimetersToWorldUnits  * length(unity_ObjectToWorld[0].xyz);
       }
 
       v2f vert (ParticleVertexWithSpread_t v) {
@@ -103,15 +106,34 @@ CBUFFER_START(UnityPerMaterial)
         float sparkle = (pow(abs(sin(_Time.y * 3 + seed * 10)), 30));
         v.color.rgb += pow(t_minus_1,10)*incolor*200;
         v.color.rgb += incolor * sparkle * 50;
+
+#ifdef AUDIO_REACTIVE
+        // Additional color boost from beat detection
+        v.color.rgb = v.color.rgb * .5 + 2*_BeatOutput.x * v.color.rgb;
+#endif
+
         // Dim over lifetime
         v.color.rgb *= incolor * pow (1 - t01, 2)*5;
-        
+
+        // Custom vertex animation
+#if 1
+        // Displacement is in scene space
+        // Note that xf_CS is actually scene, not canvas
+        // The problem with this is that if you scale up a layer, the particles
+        // get big but the overall motion stays the same.
         float4 center_WS = mul(unity_ObjectToWorld, center);
-        center_WS.xyz += mul(xf_CS, float4(disp, 0)).xyz;
+        center_WS.xyz += mul(xf_CS, float4(disp, 0));
         float4 corner_WS = OrientParticle_WS(center_WS.xyz, halfSize, v.vid, rotation);
-        o.vertex.xyz = TransformObjectToWorld (corner_WS.xyz);
-        o.vertex.xyz = TransformWorldToView(o.vertex.xyz);
-        o.vertex = mul(UNITY_MATRIX_P, float4(o.vertex.xyz, 1.0f));
+        o.vertex = mul(UNITY_MATRIX_VP, corner_WS);
+#else
+        // TODO(pld): convince drew to use this version
+        // Displacement is in canvas space
+        // Note that we assume object space == canvas space (which it is, for TB)
+        center = center + float4(disp.xyz, 0);
+        float4 corner = OrientParticle(center.xyz, halfSize, v.vid, rotation);
+        o.vertex = UnityObjectToClipPos(corner);
+#endif
+
         o.color = v.color;
         o.texcoord = TRANSFORM_TEX(v.texcoord.xy,_MainTex);
 
@@ -119,14 +141,14 @@ CBUFFER_START(UnityPerMaterial)
       }
 
       // i.color is srgb
-      half4 frag (v2f i) : SV_Target
+      fixed4 frag (v2f i) : SV_Target
       {
         float4 color = 2.0f * i.color * _TintColor * tex2D(_MainTex, i.texcoord);
         color = float4(color.rgb * color.a, 1.0);
         color = SrgbToNative(color);
         return color;
       }
-      ENDHLSL
+      ENDCG
     }
   }
 }

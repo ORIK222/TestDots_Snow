@@ -134,9 +134,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b5a1f07dc5afe854f9f12a4194aca3fb, type: 3}
   m_Name: iPhone
   m_EditorClassIdentifier: 
-  features: []
   m_renderMode: 1
   m_depthSubmissionMode: 0
+  features: []
 --- !u!114 &-5182553753659350493
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -149,6 +149,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b5a1f07dc5afe854f9f12a4194aca3fb, type: 3}
   m_Name: Android
   m_EditorClassIdentifier: 
+  m_renderMode: 1
+  m_depthSubmissionMode: 0
   features:
   - {fileID: 6551194708772154139}
   - {fileID: -6647910016068364354}
@@ -157,8 +159,6 @@ MonoBehaviour:
   - {fileID: -2670788910239135592}
   - {fileID: 7019305401381196730}
   - {fileID: -8029488747368202665}
-  m_renderMode: 1
-  m_depthSubmissionMode: 0
 --- !u!114 &-4538105311093805757
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -309,9 +309,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b5a1f07dc5afe854f9f12a4194aca3fb, type: 3}
   m_Name: WebGL
   m_EditorClassIdentifier: 
-  features: []
   m_renderMode: 1
   m_depthSubmissionMode: 0
+  features: []
 --- !u!114 &3777304855025811704
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -405,6 +405,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b5a1f07dc5afe854f9f12a4194aca3fb, type: 3}
   m_Name: Standalone
   m_EditorClassIdentifier: 
+  m_renderMode: 1
+  m_depthSubmissionMode: 0
   features:
   - {fileID: -7405476875835992306}
   - {fileID: -6338535925477452409}
@@ -416,8 +418,6 @@ MonoBehaviour:
   - {fileID: -3722485549655466293}
   - {fileID: 8003789993381352907}
   - {fileID: -4538105311093805757}
-  m_renderMode: 1
-  m_depthSubmissionMode: 0
 --- !u!114 &8003789993381352907
 MonoBehaviour:
   m_ObjectHideFlags: 0

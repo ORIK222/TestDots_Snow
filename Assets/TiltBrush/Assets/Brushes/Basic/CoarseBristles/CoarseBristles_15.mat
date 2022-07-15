@@ -4,13 +4,12 @@
 Material:
   serializedVersion: 6
   m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 0}
   m_Name: CoarseBristles_15
-  m_Shader: {fileID: 4800000, guid: 6eca343108a01a946a82e0c33f58fda1, type: 3}
+  m_Shader: {fileID: 4800000, guid: 76dc2f7fe973ede4bbbedfc291269c84, type: 3}
   m_ShaderKeywords: _EMISSION
-  m_LightmapFlags: 2
+  m_LightmapFlags: 1
   m_EnableInstancingVariants: 0
   m_DoubleSidedGI: 0
   m_CustomRenderQueue: -1
@@ -19,14 +18,6 @@ Material:
   m_SavedProperties:
     serializedVersion: 3
     m_TexEnvs:
-    - Texture2D_0a039c6d801041db9a2550fa17d7eb78:
-        m_Texture: {fileID: 2800000, guid: 511e136566fbfc241b63ff2207dbcafe, type: 3}
-        m_Scale: {x: 1, y: 1}
-        m_Offset: {x: 0, y: 0}
-    - Texture2D_1:
-        m_Texture: {fileID: 0}
-        m_Scale: {x: 1, y: 1}
-        m_Offset: {x: 0, y: 0}
     - _BumpMap:
         m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
@@ -63,21 +54,7 @@ Material:
         m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
-    - unity_Lightmaps:
-        m_Texture: {fileID: 0}
-        m_Scale: {x: 1, y: 1}
-        m_Offset: {x: 0, y: 0}
-    - unity_LightmapsInd:
-        m_Texture: {fileID: 0}
-        m_Scale: {x: 1, y: 1}
-        m_Offset: {x: 0, y: 0}
-    - unity_ShadowMasks:
-        m_Texture: {fileID: 0}
-        m_Scale: {x: 1, y: 1}
-        m_Offset: {x: 0, y: 0}
     m_Floats:
-    - Vector1_4c9cf6267d0b41b19890c5a6d82d0461: 0.4
-    - Vector1_f38a89e57d714193b437b2aae379810a: 0.557
     - _BumpScale: 1
     - _Cutoff: 0.25
     - _DetailNormalMapScale: 1
@@ -89,20 +66,11 @@ Material:
     - _Mode: 0
     - _OcclusionStrength: 1
     - _Parallax: 0.02
-    - _Shininess: 0.078125
     - _SmoothnessTextureChannel: 0
     - _SpecularHighlights: 1
     - _SrcBlend: 1
     - _UVSec: 0
     - _ZWrite: 1
     m_Colors:
-    - Color_4003437633a543b698587b653e02c7aa: {r: 0.23529407, g: 0.23529407, b: 0.23529407, a: 1}
-    - Color_6590de550e444df094b963e2d693bd17: {r: 1, g: 1, b: 1, a: 1}
-    - Vector2_1: {r: 0, g: 0, b: 0, a: 0}
-    - Vector2_5757a64c6a0f49749faba5e662c6dc48: {r: 0, g: 0, b: 0, a: 0}
-    - Vector2_fb4121251a2645d5a12dd386412b8cb9: {r: 1, g: 1, b: 0, a: 0}
-    - Vector2_fb4121251a2645d5a12dd386412b8cb9_1: {r: 1, g: 1, b: 0, a: 0}
     - _Color: {r: 1, g: 1, b: 1, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
-    - _SpecColor: {r: 0.5, g: 0.5, b: 0.5, a: 0}
-  m_BuildTextureStacks: []

@@ -20,7 +20,6 @@ Properties {
   _WaveformIntensity("Waveform Intensity", Vector) = (0,1,0,0)
   _BaseGain("Base Gain", Float) = 0
   _EmissionGain("Emission Gain", Float) = 0
-  _Shininess ("Shininess", Range (0.01, 1)) = 0.078125
 }
 
 Category {
@@ -33,45 +32,38 @@ Category {
 
   SubShader {
     Pass {
-  HLSLPROGRAM
 
+      CGPROGRAM
       #pragma vertex vert
       #pragma fragment frag
-      #pragma exclude_renderers gles gles3 glcore
-      #pragma exclude_renderers gles gles3 glcore
-      #pragma target 4.5
-      #pragma multi_compile_instancing
-      #pragma instancing_options renderinglayer
-      #pragma multi_compile _ DOTS_INSTANCING_ON
-      #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
-      #include "../../../Shaders/Include/Particles.hlsl"
+      #pragma target 3.0
+      #pragma glsl
+      #pragma multi_compile __ AUDIO_REACTIVE
+      #pragma multi_compile __ TBT_LINEAR_TARGET
+      #include "UnityCG.cginc"
+      #include "../../../Shaders/Include/Brush.cginc"
+      #include "../../../Shaders/Include/Particles.cginc"
+      #include "Assets/ThirdParty/Noise/Shaders/Noise.cginc"
 
+      sampler2D _MainTex;
+      fixed4 _TintColor;
 
-CBUFFER_START(UnityPerMaterial)
+      struct v2f {
+        float4 vertex : SV_POSITION;
+        fixed4 color : COLOR;
+        float2 texcoord : TEXCOORD0;
+        float waveform : TEXCOORD1;
+      };
+
       float4 _MainTex_ST;
       float _WaveformFreq;
       float4 _WaveformIntensity;
       float _EmissionGain;
       float _BaseGain;
-      sampler2D _MainTex;
-      half4 _TintColor;
-      CBUFFER_END
-      #ifdef UNITY_DOTS_INSTANCING_ENABLED  
-                UNITY_DOTS_INSTANCING_START(MaterialPropertyMetadata)
-                    UNITY_DOTS_INSTANCED_PROP(float, _Shininess)
-                UNITY_DOTS_INSTANCING_END(MaterialPropertyMetadata)
-            #define _Shininess UNITY_ACCESS_DOTS_INSTANCED_PROP_WITH_DEFAULT(float, _Shininess)
-      #endif
-      struct v2f
-  {
-        float4 vertex : SV_POSITION;
-        half4 color : COLOR;
-        float2 texcoord : TEXCOORD0;
-        float waveform : TEXCOORD1;
-      };
-  
+
       v2f vert (ParticleVertex_t v)
       {
+        v.color = TbVertToSrgb(v.color);
         v2f o;
         float birthTime = v.texcoord.w;
         float rotation = v.texcoord.z;
@@ -80,8 +72,15 @@ CBUFFER_START(UnityPerMaterial)
         float4 corner = OrientParticle(center.xyz, halfSize, v.vid, rotation);
         float waveform = 0;
         // TODO: displacement should happen before orientation
-
-        o.vertex = TransformObjectToHClip(corner.xyz);
+#ifdef AUDIO_REACTIVE
+        float4 dispVec = float4(0,0,0,0);
+        float4 corner_WS = mul(unity_ObjectToWorld, corner);
+        // TODO(pld): worldspace is almost certainly incorrect: use scene or object?
+        waveform = tex2Dlod(_FFTTex, float4(fmod(corner_WS.x * _WaveformFreq + _BeatOutputAccum.z*.5,1),0,0,0) ).b * .25;
+        dispVec.xyz += waveform * _WaveformIntensity.xyz;
+        corner = corner + dispVec;
+#endif
+        o.vertex = UnityObjectToClipPos(corner);
         o.color = v.color * _BaseGain;
         o.texcoord = TRANSFORM_TEX(v.texcoord.xy,_MainTex);
         o.waveform = waveform * 15;
@@ -89,19 +88,26 @@ CBUFFER_START(UnityPerMaterial)
       }
 
       // Input color is srgb
-      half4 frag (v2f i) : SV_Target
+      fixed4 frag (v2f i) : SV_Target
       {
+#ifdef AUDIO_REACTIVE
+        // Deform uv's by waveform displacement amount vertically
+        // Envelop by "V" UV to keep the edges clean
+        float vDistance = abs(i.texcoord.y - .5)*2;
+        float vStretched = (i.texcoord.y - 0.5) * (.5 - abs(i.waveform)) * 2 + 0.5;
+        i.texcoord.y = lerp(vStretched, i.texcoord.y, vDistance);
+#endif
         float4 tex = tex2D(_MainTex, i.texcoord);
         float4 c = i.color * _TintColor * tex;
 
         // Only alpha channel receives emission boost
         c.rgb += c.rgb * c.a * _EmissionGain;
         c.a = 1;
-        //c = SrgbToNative(c);
+        c = SrgbToNative(c);
         return float4(c.rgb, 1.0);
       }
-      ENDHLSL
+      ENDCG
     }
   }
 }
-  }
+}

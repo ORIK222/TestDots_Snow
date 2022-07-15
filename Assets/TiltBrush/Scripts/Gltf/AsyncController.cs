@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading;
 using TiltBrushToolkit;
 using UnityEngine;
@@ -17,6 +18,12 @@ public class AsyncController : MonoBehaviour
     private List<Action> actionsForMainThread = new List<Action>();
     private Exception exception;
     private Func<AsyncController, IEnumerator> coroutine;
+
+    public Stream Stream
+    {
+        get;
+        set;
+    }
 
     public GltfImportOptions Options
     {
@@ -171,6 +178,7 @@ public class AsyncController : MonoBehaviour
         coroutine = null;
         if (Result != null)
         {
+            ImportGltf.UnregisterResult(Result);
             if (Result.materialCollector is IDisposable)
             {
                 (Result.materialCollector as IDisposable).Dispose();
@@ -194,6 +202,12 @@ public class AsyncController : MonoBehaviour
         {
             this.State.Dispose();
             this.State = null;
+        }
+
+        if (this.Stream != null)
+        {
+            this.Stream.Dispose();
+            this.Stream = null;
         }
 
         controllers.Remove(this);

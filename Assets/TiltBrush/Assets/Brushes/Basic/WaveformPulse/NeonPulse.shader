@@ -14,94 +14,57 @@
 
 Shader "Brush/Visualizer/WaveformPulse" {
 Properties {
-  _MainTex("Texture", 2D) = "white" {}
   _EmissionGain ("Emission Gain", Range(0, 1)) = 0.5
 }
 
-  SubShader{
-    Tags{ "Queue" = "AlphaTest" "IgnoreProjector" = "True" "RenderType" = "TransparentCutout" }
-    Cull off
-    LOD 200
+    SubShader {
+    Tags { "Queue"="Transparent" "IgnoreProjector"="True" "RenderType"="Transparent" }
+    Blend One One
+    Cull off ZWrite Off
 
-    Pass {
-      HLSLPROGRAM
-        #pragma vertex vert
-        #pragma fragment frag
-      #pragma exclude_renderers gles gles3 glcore
-      #pragma target 4.5
-      #pragma multi_compile_instancing
-      #pragma instancing_options renderinglayer
-      #pragma multi_compile _ DOTS_INSTANCING_ON
-      #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
-      #pragma multi_compile_fwdbase nolightmap nodirlightmap nodynlightmap novertexlight noshadow
-      #include "../../../Shaders/Include/Brush.hlsl"
+    CGPROGRAM
+    #pragma target 3.0
+    #pragma surface surf StandardSpecular vertex:vert
+    #pragma multi_compile __ AUDIO_REACTIVE
+    #pragma multi_compile __ TBT_LINEAR_TARGET
+    #include "../../../Shaders/Include/Brush.cginc"
 
-CBUFFER_START(UnityPerMaterial)
-      sampler2D _MainTex;
-      float4 _MainTex_ST;
-      float _EmissionGain;
-CBUFFER_END
+    struct Input {
+      float4 color : Color;
+      float2 tex : TEXCOORD0;
+      float3 viewDir;
+      float3 worldNormal;
+      INTERNAL_DATA
+    };
 
-        struct appdata {
-            float4 vertex : POSITION;
-            half2 uv : TEXCOORD0;
-            half4 normal : NORMAL;
-            half4 color : COLOR;
-            float4 tangent : TANGENT;
-        };
+    float _EmissionGain;
 
-        struct v2f {
-            float4 pos : SV_POSITION;
-            half2 uv : TEXCOORD0;
-            float3 worldNormal : NORMAL;
-            half4 color : COLOR;
-            half3 tspace0 : TEXCOORD1;
-            half3 tspace1 : TEXCOORD2;
-            half3 tspace2 : TEXCOORD3;
-        };
-
-
-  v2f vert (appdata v) {
-          v2f o;
-          o.pos = TransformObjectToHClip(v.vertex.xyz);
-          o.uv = TRANSFORM_TEX(v.uv, _MainTex);
-          o.worldNormal = TransformObjectToWorldNormal(v.normal.xyz);
-          o.color = v.color;
-
-          half3 wNormal = TransformObjectToWorldNormal(v.normal.xyz);
-          half3 wTangent = TransformObjectToWorldDir(v.tangent.xyz);
-          half tangentSign = v.tangent.w * unity_WorldTransformParams.w;
-          half3 wBitangent = cross(wNormal, wTangent) * tangentSign;
-          o.tspace0 = half3(wTangent.x, wBitangent.x, wNormal.x);
-          o.tspace1 = half3(wTangent.y, wBitangent.y, wNormal.y);
-          o.tspace2 = half3(wTangent.z, wBitangent.z, wNormal.z);
-          return o;
-        }
-
-          half4 frag (v2f i, half vface : VFACE) : SV_Target {
-          half4 col = i.color;
-          col.a = tex2D(_MainTex, i.uv).a * col.a;
-          half3 tnormal = half3(0.4,0.4,0.4);
-       
-          i.worldNormal.x = dot(i.tspace0, tnormal);
-          i.worldNormal.y = dot(i.tspace1, tnormal);
-          i.worldNormal.z = dot(i.tspace2, tnormal);
-          float audioMultiplier = 1;
-      i.uv.x -= _Time.x*15;
-      i.uv.x = fmod( abs(i.uv.x),1);
-      float neon = saturate(pow( 10 * saturate(.2 - i.uv.x),5) * audioMultiplier);
-      float4 bloom = bloomColor(i.color, _EmissionGain);
-      float3 n = i.worldNormal;
-      half3 rim = 1.0 - saturate(n);
-      bloom.xyz *= pow(1-rim.xyz,5);
-          half ndotl = saturate(dot(i.worldNormal, normalize(float3(1,1,1).xyz)));
-          half3 lighting = ndotl * 1.1;
-          col.rgb *= lighting;
-              col.rgb *= (bloom * neon).xyz;
-          return col;
-        }
-   
-    ENDHLSL
+    void vert (inout appdata_full i, out Input o) {
+      UNITY_INITIALIZE_OUTPUT(Input, o);
+      o.color = TbVertToSrgb(o.color);
+      o.tex = i.texcoord;
     }
-}    
+
+    // Input color is srgb
+    void surf (Input IN, inout SurfaceOutputStandardSpecular o) {
+      o.Smoothness = .8;
+      o.Specular = .05;
+      float audioMultiplier = 1;
+#ifdef AUDIO_REACTIVE
+      audioMultiplier += audioMultiplier * _BeatOutput.x;
+      IN.tex.x -= _BeatOutputAccum.z;
+      IN.color += IN.color * _BeatOutput.w * .25;
+#else
+      IN.tex.x -= _Time.x*15;
+#endif
+      IN.tex.x = fmod( abs(IN.tex.x),1);
+      float neon = saturate(pow( 10 * saturate(.2 - IN.tex.x),5) * audioMultiplier);
+      float4 bloom = bloomColor(IN.color, _EmissionGain);
+      float3 n = WorldNormalVector (IN, o.Normal);
+      half rim = 1.0 - saturate(dot (normalize(IN.viewDir), n));
+      bloom *= pow(1-rim,5);
+      o.Emission = SrgbToNative(bloom * neon);
+    }
+    ENDCG
+    }
 }

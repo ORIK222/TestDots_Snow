@@ -30,35 +30,31 @@ Category {
   SubShader {
     Pass {
 
-      HLSLPROGRAM
+      CGPROGRAM
       #pragma vertex vert
       #pragma fragment frag
-      #pragma exclude_renderers gles gles3 glcore
-      #pragma target 4.5
-      #pragma multi_compile_instancing
-      #pragma instancing_options renderinglayer
-      #pragma multi_compile _ DOTS_INSTANCING_ON
-      #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
-      #include "../../../Shaders/Include/Brush.hlsl"
-      
-CBUFFER_START(UnityPerMaterial)
+      #pragma multi_compile __ AUDIO_REACTIVE
+      #pragma multi_compile __ TBT_LINEAR_TARGET
+      #include "UnityCG.cginc"
+      #include "../../../Shaders/Include/Brush.cginc"
+
       sampler2D _MainTex;
       sampler2D _AlphaMask;
       float4 _MainTex_ST;
       float4 _AlphaMask_ST;
       float _Speed;
       half _EmissionGain;
-      CBUFFER_END
+
       struct appdata_t {
         float4 vertex : POSITION;
-        half4 color : COLOR;
+        fixed4 color : COLOR;
         float3 normal : NORMAL;
         float3 texcoord : TEXCOORD0;
       };
 
       struct v2f {
         float4 vertex : POSITION;
-        half4 color : COLOR;
+        fixed4 color : COLOR;
         float2 texcoord : TEXCOORD0;
       };
 
@@ -69,17 +65,28 @@ CBUFFER_START(UnityPerMaterial)
 
         o.texcoord = TRANSFORM_TEX(v.texcoord,_MainTex);
         o.color = TbVertToNative(v.color);
-        o.vertex = TransformObjectToHClip(v.vertex.xyz);
+
+#ifdef AUDIO_REACTIVE
+        float3 displacement = _BeatOutput.y * v.normal *
+            saturate((1.0 - smoothstep(0, .3, v.texcoord.x)) * v.texcoord.z);
+        v.vertex.xyz += displacement;
+#endif
+        o.vertex = UnityObjectToClipPos(v.vertex);
 
         return o;
       }
 
-      half4 frag (v2f i) : COLOR
+      fixed4 frag (v2f i) : COLOR
       {
+        // Set up some staggered scrolling for "fire" effect
+#ifdef AUDIO_REACTIVE
+        float time = (_Time.x * 2 + _BeatOutputAccum.w) * -_Speed;
+#else
         float time = _Time.y * -_Speed;
-        half2 scrollUV = i.texcoord;
-        half2 scrollUV2 = i.texcoord;
-        half2 scrollUV3 = i.texcoord;
+#endif
+        fixed2 scrollUV = i.texcoord;
+        fixed2 scrollUV2 = i.texcoord;
+        fixed2 scrollUV3 = i.texcoord;
         scrollUV.y += time; // a little twisting motion
         scrollUV.x += time;
         scrollUV2.x += time * 1.5;
@@ -102,7 +109,7 @@ CBUFFER_START(UnityPerMaterial)
 
         return float4((tex * i.color).rgb , 1.0);
       }
-      ENDHLSL
+      ENDCG
     }
   }
 }

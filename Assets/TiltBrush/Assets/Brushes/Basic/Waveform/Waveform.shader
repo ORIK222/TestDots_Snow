@@ -16,7 +16,6 @@ Shader "Brush/Visualizer/Waveform" {
 Properties {
   _MainTex ("Particle Texture", 2D) = "white" {}
   _EmissionGain ("Emission Gain", Range(0, 1)) = 0.5
-    _Shininess ("Shininess", Range (0.01, 1)) = 0.078125
 }
 
 Category {
@@ -30,60 +29,59 @@ Category {
   SubShader {
     Pass {
 
-      HLSLPROGRAM
+      CGPROGRAM
       #pragma vertex vert
       #pragma fragment frag
-      #pragma exclude_renderers gles gles3 glcore
-      #pragma exclude_renderers gles gles3 glcore
-      #pragma target 4.5
-      #pragma multi_compile_instancing
-      #pragma instancing_options renderinglayer
-      #pragma multi_compile _ DOTS_INSTANCING_ON
-      #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
-      #include "../../../Shaders/Include/Brush.hlsl"
-      
-CBUFFER_START(UnityPerMaterial)
+      #pragma target 3.0
+      #pragma multi_compile_particles
+      #pragma multi_compile __ AUDIO_REACTIVE
+      #pragma multi_compile __ TBT_LINEAR_TARGET
+
+      #include "UnityCG.cginc"
+      #include "../../../Shaders/Include/Brush.cginc"
+
       sampler2D _MainTex;
       float4 _MainTex_ST;
       float _EmissionGain;
-CBUFFER_END
-      #ifdef UNITY_DOTS_INSTANCING_ENABLED  
-                UNITY_DOTS_INSTANCING_START(MaterialPropertyMetadata)
-                    UNITY_DOTS_INSTANCED_PROP(float, _Shininess)
-                UNITY_DOTS_INSTANCING_END(MaterialPropertyMetadata)
-            #define _Shininess UNITY_ACCESS_DOTS_INSTANCED_PROP_WITH_DEFAULT(float, _Shininess)
-      #endif
+
       struct appdata_t {
         float4 vertex : POSITION;
-        half4 color : COLOR;
+        fixed4 color : COLOR;
         float2 texcoord : TEXCOORD0;
       };
+
       struct v2f {
         float4 vertex : SV_POSITION;
         float4 color : COLOR;
         float2 texcoord : TEXCOORD0;
         float4 unbloomedColor : TEXCOORD1;
       };
+
       v2f vert (appdata_t v)
       {
         v.color = TbVertToSrgb(v.color);
 
         v2f o;
-        o.vertex = TransformObjectToHClip(v.vertex.xyz);
+        o.vertex = UnityObjectToClipPos(v.vertex);
         o.texcoord = TRANSFORM_TEX(v.texcoord,_MainTex);
         o.color = bloomColor(v.color, _EmissionGain);
         o.unbloomedColor = v.color;
         return o;
       }
 
-      half4 frag (v2f i) : SV_Target
+      // Input colors are srgb
+      fixed4 frag (v2f i) : SV_Target
       {
         // Envelope
         float envelope = sin(i.texcoord.x * 3.14159);
-        
+
+#ifdef AUDIO_REACTIVE
+        float waveform = (tex2D(_WaveFormTex, float2(i.texcoord.x,0)).r) - .5;
+#else
         float waveform = .15 * sin( -30 * i.unbloomedColor.r * _Time.w + i.texcoord.x * 100   * i.unbloomedColor.r);
         waveform += .15 * sin( -40 * i.unbloomedColor.g * _Time.w + i.texcoord.x * 100   * i.unbloomedColor.g);
         waveform += .15 * sin( -50 * i.unbloomedColor.b * _Time.w + i.texcoord.x * 100   * i.unbloomedColor.b);
+#endif
 
         float pinch = (1 - envelope) * 40 + 20;
         float procedural_line = saturate(1 - pinch*abs(i.texcoord.y - .5 -waveform * envelope));
@@ -94,7 +92,7 @@ CBUFFER_END
         color = SrgbToNative(color);
         return color;
       }
-      ENDHLSL
+      ENDCG
     }
   }
 }

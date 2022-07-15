@@ -19,27 +19,27 @@ Properties {
     _EmissionGain ("Emission Gain", Range(0, 1)) = 0.5
 }
 
-HLSLINCLUDE
-      #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
-      #include "../../../Shaders/Include/Brush.hlsl"
-      #include "Assets/ThirdParty/Noise/Shaders/Noise.hlsl"
+CGINCLUDE
+  #include "UnityCG.cginc"
+  #include "../../../Shaders/Include/Brush.cginc"
+  #include "Assets/ThirdParty/Noise/Shaders/Noise.cginc"
 
   struct appdata_t {
     float4 vertex : POSITION;
-    half4 color : COLOR;
+    fixed4 color : COLOR;
     float3 normal : NORMAL;
     float3 tangent : TANGENT;
     float2 texcoord0 : TEXCOORD0;
     float3 texcoord1 : TEXCOORD1;
   };
-CBUFFER_START(UnityPerMaterial)
+
   sampler2D _MainTex;
   half _DisplacementIntensity;
   half _EmissionGain;
-CBUFFER_END
+
   struct v2f {
     float4 vertex : SV_POSITION;
-    half4 color : COLOR;
+    fixed4 color : COLOR;
     float2 texcoord : TEXCOORD0;
   };
 
@@ -77,13 +77,19 @@ CBUFFER_END
     disp *= widthiness_CS;
 
     float waveform = 0;
+#ifdef AUDIO_REACTIVE
+    disp *= (_BeatOutput.x * 1 + .5);
+    waveform = (tex2Dlod(_WaveFormTex, float4(v.texcoord0.x,0,0,0)).r - .5f);
+    disp.y += waveform * .1;
+    v.color = v.color*.5 + v.color*_BeatOutput.z*.5;
+#endif
     // This recreates the standard ribbon position with some tapering at edges
     v.vertex.xyz = midpointPos_CS + offsetFromMiddleToEdge_CS * envelopePow;
 
     // This adds curl noise
     v.vertex.xyz += disp * _DisplacementIntensity * envelopePow;
 
-    o.vertex = TransformObjectToHClip(v.vertex.xyz);
+    o.vertex = UnityObjectToClipPos(v.vertex);
     o.color = bloomColor(v.color, _EmissionGain);
     o.texcoord = v.texcoord0;
 
@@ -106,7 +112,7 @@ CBUFFER_END
   }
 
   // Input color is srgb
-  half4 frag (v2f i) : SV_Target
+  fixed4 frag (v2f i) : SV_Target
   {
     // interior procedural line
     float procedural = ( abs(i.texcoord.y - 0.5) < .1 ) ? 2 : 0;
@@ -116,7 +122,7 @@ CBUFFER_END
     c = SrgbToNative(c);
     return c;
   }
-ENDHLSL
+ENDCG
 
 Category {
   Tags { "Queue"="Transparent" "IgnoreProjector"="True" "RenderType"="Transparent" }
@@ -129,39 +135,36 @@ Category {
 
   SubShader {
     Pass {
-      HLSLPROGRAM
+      CGPROGRAM
       #pragma vertex vert_1
       #pragma fragment frag
-      #pragma exclude_renderers gles gles3 glcore
-      #pragma target 4.5
-      #pragma multi_compile_instancing
-      #pragma instancing_options renderinglayer
-      #pragma multi_compile _ DOTS_INSTANCING_ON
-      ENDHLSL
+      #pragma target 3.0
+      #pragma multi_compile_particles
+      #pragma multi_compile __ AUDIO_REACTIVE
+      #pragma multi_compile __ TBT_LINEAR_TARGET
+      ENDCG
     }
 
     Pass {
-      HLSLPROGRAM
+      CGPROGRAM
       #pragma vertex vert_2
       #pragma fragment frag
-      #pragma exclude_renderers gles gles3 glcore
-      #pragma target 4.5
-      #pragma multi_compile_instancing
-      #pragma instancing_options renderinglayer
-      #pragma multi_compile _ DOTS_INSTANCING_ON
-      ENDHLSL
+      #pragma target 3.0
+      #pragma multi_compile_particles
+      #pragma multi_compile __ AUDIO_REACTIVE
+      #pragma multi_compile __ TBT_LINEAR_TARGET
+      ENDCG
     }
 
     Pass {
-      HLSLPROGRAM
+      CGPROGRAM
       #pragma vertex vert_3
       #pragma fragment frag
-      #pragma exclude_renderers gles gles3 glcore
-      #pragma target 4.5
-      #pragma multi_compile_instancing
-      #pragma instancing_options renderinglayer
-      #pragma multi_compile _ DOTS_INSTANCING_ON
-      ENDHLSL
+      #pragma target 3.0
+      #pragma multi_compile_particles
+      #pragma multi_compile __ AUDIO_REACTIVE
+      #pragma multi_compile __ TBT_LINEAR_TARGET
+      ENDCG
     }
   }
 }

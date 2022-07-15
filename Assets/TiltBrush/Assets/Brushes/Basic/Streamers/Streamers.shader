@@ -32,40 +32,38 @@ Category {
   SubShader {
     Pass {
 
-      HLSLPROGRAM
+      CGPROGRAM
       #pragma vertex vert
       #pragma fragment frag
-      #pragma exclude_renderers gles gles3 glcore
-      #pragma target 4.5
-      #pragma multi_compile_instancing
-      #pragma instancing_options renderinglayer
-      #pragma multi_compile _ DOTS_INSTANCING_ON
-      #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
-      #include "../../../Shaders/Include/Brush.hlsl"
-      
-CBUFFER_START(UnityPerMaterial)
+      #pragma multi_compile __ AUDIO_REACTIVE
+      #pragma multi_compile_particles
+      #pragma multi_compile __ TBT_LINEAR_TARGET
+      #pragma target 3.0 // Required -> compiler error: too many instructions for SM 2.0
+
+      #include "UnityCG.cginc"
+      #include "../../../Shaders/Include/Brush.cginc"
+
       sampler2D _MainTex;
-      float4 _MainTex_ST;
-      half _Scroll1;
-      half _Scroll2;
-      half _DisplacementIntensity;
-      half _EmissionGain;
-      CBUFFER_END
+
       struct appdata_t {
         float4 vertex : POSITION;
-        half4 color : COLOR;
+        fixed4 color : COLOR;
         float3 normal : NORMAL;
         float2 texcoord : TEXCOORD0;
       };
 
       struct v2f {
         float4 vertex : SV_POSITION;
-        half4 color : COLOR;
+        fixed4 color : COLOR;
         float2 texcoord : TEXCOORD0;
         float4 worldPos : TEXCOORD1;
       };
 
-
+      float4 _MainTex_ST;
+      fixed _Scroll1;
+      fixed _Scroll2;
+      half _DisplacementIntensity;
+      half _EmissionGain;
 
       v2f vert (appdata_t v)
       {
@@ -73,7 +71,7 @@ CBUFFER_START(UnityPerMaterial)
 
         v2f o;
         o.worldPos = mul(unity_ObjectToWorld, v.vertex);
-        o.vertex = TransformObjectToHClip(v.vertex.xyz);
+        o.vertex = UnityObjectToClipPos(v.vertex);
         o.texcoord = TRANSFORM_TEX(v.texcoord,_MainTex);
         o.color = v.color;
         return o;
@@ -86,7 +84,7 @@ CBUFFER_START(UnityPerMaterial)
       }
 
       // Input color is srgb
-      half4 frag (v2f i) : SV_Target
+      fixed4 frag (v2f i) : SV_Target
       {
         // Create parametric flowing UV's
         half2 uvs = i.texcoord;
@@ -96,10 +94,16 @@ CBUFFER_START(UnityPerMaterial)
 
         half2 sins = sin(uvs.x * half2(10,23) + _Time.z * half2(5,3));
         uvs.y = 5 * uvs.y + dot(half2(.05, -.05), sins);
-        
+
+#ifdef AUDIO_REACTIVE
+        // Scrolling UVs
+        uvs.x *= .5 + row_rand * .3;
+        uvs.x -= _BeatOutputAccum.x * (1 + fmod(row_id * 1.61803398875, 1) - 0.5);
+#else
         // Scrolling UVs
         uvs.x *= .5 + row_rand * .3;
         uvs.x -= _Time.y * (1 + fmod(row_id * 1.61803398875, 1) - 0.5);
+#endif
 
         // Sample final texture
         half4 tex = tex2D(_MainTex, uvs);
@@ -113,12 +117,16 @@ CBUFFER_START(UnityPerMaterial)
         tex *= 1 - fmod(uvs.y,1); // bottom edge
         tex *= 1 - fmod(uvs.y,1); // bottom edge
 
+#ifdef AUDIO_REACTIVE
+        tex += tex * _BeatOutput.x;
+#endif
+
         float4 color = i.color * tex * exp(_EmissionGain * 5.0f);
         color = float4(color.rgb * color.a, 1.0);
         color = SrgbToNative(color);
         return color;
       }
-      ENDHLSL
+      ENDCG
     }
   }
 }

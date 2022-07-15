@@ -31,51 +31,51 @@ Category {
   SubShader {
     Pass {
 
-      HLSLPROGRAM
+      CGPROGRAM
       #pragma vertex vert
       #pragma fragment frag
-      #pragma exclude_renderers gles gles3 glcore
-      #pragma target 4.5
-      #pragma multi_compile_instancing
-      #pragma instancing_options renderinglayer
-      #pragma multi_compile _ DOTS_INSTANCING_ON
-      #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
-      #include "../../../Shaders/Include/Brush.hlsl"
-      #include "../../../Shaders/Include/Particles.hlsl"
-      #include "Assets/ThirdParty/Noise/Shaders/Noise.hlsl"
+      #pragma multi_compile_particles
+      #pragma target 3.0
+      #pragma multi_compile __ TBT_LINEAR_TARGET
+
+      #include "UnityCG.cginc"
+      #include "../../../Shaders/Include/Brush.cginc"
+      #include "../../../Shaders/Include/Particles.cginc"
+      #include "Assets/ThirdParty/Noise/Shaders/Noise.cginc"
 
       sampler2D _MainTex;
-      half4 _TintColor;
+      fixed4 _TintColor;
 
       struct v2f {
         float4 vertex : SV_POSITION;
-        half4 color : COLOR;
+        fixed4 color : COLOR;
         float2 texcoord : TEXCOORD0;
       };
-CBUFFER_START(UnityPerMaterial)
+
       float4 _MainTex_ST;
       float _ScrollRate;
       float _ScrollJitterIntensity;
       float _ScrollJitterFrequency;
       float3 _WorldSpaceRootCameraPosition;
       float _SpreadRate;
-CBUFFER_END
 
-    float3 computeDisplacement(float3 seed, float timeOffset) {
-	    float3 jitter;
-	    float t = _Time.y * _ScrollRate + timeOffset;
-	    jitter.x = sin(t + _Time.y + seed.z * _ScrollJitterFrequency);
-	    jitter.z = cos(t + _Time.y + seed.x * _ScrollJitterFrequency);
-	    jitter.y = cos(t * 1.2 + _Time.y + seed.x * _ScrollJitterFrequency);
-	    jitter *= _ScrollJitterIntensity;
+      float3 computeDisplacement(float3 seed, float timeOffset) {
+        float3 jitter; {
+          float t = _Time.y * _ScrollRate + timeOffset;
+          jitter.x = sin(t       + _Time.y + seed.z * _ScrollJitterFrequency);
+          jitter.z = cos(t       + _Time.y + seed.x * _ScrollJitterFrequency);
+          jitter.y = cos(t * 1.2 + _Time.y + seed.x * _ScrollJitterFrequency);
+          jitter *= _ScrollJitterIntensity;
+        }
 
-	    float3 curl;
-	    float3 v = (seed + jitter) * .1 + _Time.x * 5;
-	    float d = 30;
-	    curl = float3(curlX(v, d), curlY(v, d), curlZ(v, d)) * 10;
+        float3 curl; {
+          float3 v = (seed + jitter) * .1 + _Time.x * 5;
+          float d = 30;
+          curl = float3(curlX(v, d), curlY(v, d), curlZ(v, d)) * 10;
+        }
 
-	    return (jitter + curl) * kDecimetersToWorldUnits;
-    }
+        return (jitter + curl) * kDecimetersToWorldUnits;
+      }
 
       v2f vert (ParticleVertexWithSpread_t v) {
         v2f o;
@@ -86,12 +86,12 @@ CBUFFER_END
         float spreadProgress = SpreadProgress(birthTime, _SpreadRate);
         float4 center = SpreadParticle(v, spreadProgress);
 
-        float3 displacement_SS = spreadProgress * computeDisplacement(center.xyz, 1);
-        float3 displacement_WS = mul(xf_CS, float4(displacement_SS, 0)).xyz;
-        float3 displacement_OS = mul(unity_WorldToObject, float4(displacement_WS, 0)).xyz;
+        float3 displacement_SS = spreadProgress * computeDisplacement(center, 1);
+        float3 displacement_WS = mul(xf_CS, float4(displacement_SS, 0));
+        float3 displacement_OS = mul(unity_WorldToObject, float4(displacement_WS, 0));
         center.xyz += displacement_OS;
         float4 corner = OrientParticle(center.xyz, halfSize, v.vid, rotation);
-        o.vertex = TransformObjectToHClip(corner.xyz);
+        o.vertex = UnityObjectToClipPos(corner);
 
         // Brighten up the bubbles
         o.color = v.color;
@@ -101,12 +101,12 @@ CBUFFER_END
         return o;
       }
 
-      half4 frag (v2f i) : SV_Target
+      fixed4 frag (v2f i) : SV_Target
       {
         float4 tex = tex2D(_MainTex, i.texcoord);
 
         // RGB Channels of the texture are affected by color
-        float3 basecolor = i.color.rgb * tex.rgb;
+        float3 basecolor = i.color * tex.rgb;
 
         // Alpha channel of the texture is not affected by color.  It is the fake "highlight" bubble effect.
         float3 highlightcolor = tex.a;
@@ -114,7 +114,7 @@ CBUFFER_END
         float4 color = float4(basecolor + highlightcolor, 1);
         return SrgbToNative(color);
       }
-      ENDHLSL
+      ENDCG
     }
   }
 }

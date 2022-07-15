@@ -33,34 +33,33 @@ Category {
   SubShader {
     Pass {
 
-      HLSLPROGRAM
+      CGPROGRAM
       #pragma vertex vert
       #pragma fragment frag
-      #pragma exclude_renderers gles gles3 glcore
-      #pragma target 4.5
-      #pragma multi_compile_instancing
-      #pragma instancing_options renderinglayer
-      #pragma multi_compile _ DOTS_INSTANCING_ON
-      #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
-      #include "../../../Shaders/Include/Brush.hlsl"
-       #include "../../../Shaders/Include/Particles.hlsl"
-      
-CBUFFER_START(UnityPerMaterial)
+      #pragma multi_compile_particles
+      #pragma multi_compile __ AUDIO_REACTIVE
+      #pragma multi_compile __ TBT_LINEAR_TARGET
+      #pragma target 3.0
+
+      #include "UnityCG.cginc"
+      #include "../../../Shaders/Include/Brush.cginc"
+      #include "../../../Shaders/Include/Particles.cginc"
+
       sampler2D _MainTex;
-      half4 _TintColor;
+      fixed4 _TintColor;
+
+      struct v2f {
+        float4 vertex : SV_POSITION;
+        fixed4 color : COLOR;
+        float2 texcoord : TEXCOORD0;
+      };
+
       float4 _MainTex_ST;
       float _ScrollRate;
       float3 _ScrollDistance;
       float _ScrollJitterIntensity;
       float _ScrollJitterFrequency;
       float _SpreadRate;
-CBUFFER_END
-      struct v2f {
-        float4 vertex : SV_POSITION;
-        half4 color : COLOR;
-        float2 texcoord : TEXCOORD0;
-      };
-
 
       v2f vert (ParticleVertexWithSpread_t v)
       {
@@ -79,7 +78,7 @@ CBUFFER_END
         float4 dispVec = (t - .5f) * float4(_ScrollDistance, 0.0);
         dispVec.x += sin(t * _ScrollJitterFrequency + _Time.y) * _ScrollJitterIntensity;
         dispVec.z += cos(t * _ScrollJitterFrequency * .5 + _Time.y) * _ScrollJitterIntensity;
-        dispVec.xyz = (spreadProgress * dispVec * kDecimetersToWorldUnits).xyz;
+        dispVec.xyz = spreadProgress * dispVec * kDecimetersToWorldUnits;
         center_WS += mul(xf_CS, dispVec);
 
 
@@ -91,18 +90,18 @@ CBUFFER_END
         o.color = v.color;
 #endif
 
-        o.vertex = TransformObjectToHClip(corner_WS.xyz);
+        o.vertex = mul(UNITY_MATRIX_VP, corner_WS);
         o.color.a = pow(1 - abs(2*(t - .5)), 3);
         o.texcoord = TRANSFORM_TEX(v.texcoord.xy, _MainTex);
         return o;
       }
 
       // Input color is srgb
-      half4 frag (v2f i) : SV_Target
+      fixed4 frag (v2f i) : SV_Target
       {
         return SrgbToNative(2.0f * i.color * _TintColor * tex2D(_MainTex, i.texcoord));
       }
-      ENDHLSL
+      ENDCG
     }
   }
 }

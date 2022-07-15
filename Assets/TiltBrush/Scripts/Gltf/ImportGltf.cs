@@ -22,7 +22,7 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using UnityEngine;
-
+using UnityEngine.Rendering;
 using Debug = UnityEngine.Debug;
 using Semantic = TiltBrushToolkit.BrushDescriptor.Semantic;
 
@@ -75,6 +75,8 @@ namespace TiltBrushToolkit
 
         const int kUnityMeshMaxVerts = 65534;
         const float kExtremeSizeMeters = 371f;
+
+        static Dictionary<GltfImportResult, Mesh.MeshDataArray?> registeredNative = new Dictionary<GltfImportResult, Mesh.MeshDataArray?>();
 
         public class GltfImportResult
         {
@@ -229,7 +231,8 @@ namespace TiltBrushToolkit
             a.Options = options;
             a.Success = onLoaded;
             a.Failure = onFailed;
-            Task.Run(() => AsyncImport(a, stream, options));
+            a.Stream = stream;
+            Task.Run(() => AsyncImport(a, options));
             return a;
         }
 
@@ -315,18 +318,17 @@ namespace TiltBrushToolkit
         /// performed off the main thread. The parameters are the same as for Import.
         /// </summary>
         /// <param name="asyncController">The asynchronous controller.</param>
-        /// <param name="stream">The stream.</param>
         /// <param name="options">The options.</param>
         /// <returns>
         /// An object which should be passed to <seealso cref="ImportGltf.EndImport" /> and then disposed
         /// </returns>
         /// <exception cref="System.NullReferenceException">root</exception>
-        private static void AsyncImport(AsyncController asyncController, Stream stream, GltfImportOptions options)
+        private static void AsyncImport(AsyncController asyncController, GltfImportOptions options)
         {
             try
             {
                 asyncController.State = new ImportState(options.axisConventionOverride ?? AxisConvention.kGltf2);
-                using (var info = new GltfFileInfo(stream))
+                using (var info = new GltfFileInfo(asyncController.Stream))
                 using (var reader = new JsonTextReader(info.Reader))
                 {
                     var root = DeserializeGltfRoot(info.Version, reader);
@@ -413,7 +415,6 @@ namespace TiltBrushToolkit
                     }
                 }
 
-                CreateMeshPrecursorsFromScene(asyncController);
                 asyncController.ExecuteCoroutine(FinishImport);
             }
             catch (Exception exc)
@@ -426,17 +427,12 @@ namespace TiltBrushToolkit
 
                 asyncController.ProcessingFailure(exc);
             }
-            finally
-            {
-                if (stream != null)
-                {
-                    stream.Dispose();
-                }
-            }
         }
 
         private static IEnumerator FinishImport(AsyncController asyncController)
         {
+            var root = asyncController.Result.root;
+            CreateMeshPrecursorsFromScene(asyncController);
             yield return null;
             var meshCreator = CreateGameObjectsFromNodes(asyncController);
             foreach (var unused in meshCreator)
@@ -445,7 +441,15 @@ namespace TiltBrushToolkit
                 yield return null;
             }
 
-            asyncController.Finish();
+            if (asyncController != null && asyncController.Result != null)
+            {
+                asyncController.Finish();
+            }
+            else
+            {
+                // cancelled.
+                GameObject.Destroy(root);
+            }
         }
 
         // Returns a factor to apply directly to geometry, and a factor to apply to the top node.
@@ -701,6 +705,20 @@ namespace TiltBrushToolkit
             }
         }
 
+        public static void UnregisterResult(GltfImportResult result)
+        {
+            if (registeredNative.ContainsKey(result))
+            {
+                var meshDataArray = registeredNative[result];
+                if (meshDataArray != null)
+                {
+                    meshDataArray.Value.Dispose();
+                }
+
+                registeredNative.Remove(result);
+            }
+        }
+
         static IEnumerable CreateGameObjectsFromMesh(
             Transform parent, GltfMeshBase mesh, GltfImportResult result,
             GltfMaterialConverter matConverter, bool allowMeshInParent)
@@ -739,19 +757,74 @@ namespace TiltBrushToolkit
                 if (prim.unityMeshes == null)
                 {
                     prim.unityMeshes = new List<Mesh>();
-                    for (int iM = 0; iM < prim.precursorMeshes.Count; ++iM)
+                    var meshDataArray = Mesh.AllocateWritableMeshData(prim.precursorMeshes.Count);
+                    registeredNative[result] = meshDataArray;
+                    bool disposed = false;
+                    try
                     {
-                        string meshName = primName;
-                        if (prim.precursorMeshes.Count > 1)
+                        for (int iM = 0; iM < prim.precursorMeshes.Count; ++iM)
                         {
-                            meshName += string.Format("_m{0}", iM);
+                            string meshName = primName;
+                            if (prim.precursorMeshes.Count > 1)
+                            {
+                                meshName += string.Format("_m{0}", iM);
+                            }
+
+                            Mesh umesh = new Mesh();
+                            //UnityFromPrecursorOld(umesh, prim.precursorMeshes[iM]);
+                            Bounds bounds = new Bounds();
+                            string error = null;
+                            Task t = Task.Run(() => UnityFromPrecursorNew(ref bounds, meshDataArray[iM], prim.precursorMeshes[iM], ref error));
+                            while (!t.IsCompleted)
+                            {
+                                if (error != null)
+                                {
+                                    break;
+                                }
+
+                                yield return null;
+                            }
+
+                            if (error != null)
+                            {
+                                Debug.LogError(error);
+                            }
+
+                            if (prim.precursorMeshes[iM].normals == null)
+                            {
+                                umesh.RecalculateNormals();
+                                yield return null;
+                            }
+
+                            umesh.bounds = bounds;
+                            umesh.name = meshName;
+                            prim.unityMeshes.Add(umesh);
+                            if (result.meshes != null)
+                            {
+                                result.meshes.Add(umesh);
+                            }
+
+                            yield return null;
                         }
-                        Mesh umesh = UnityFromPrecursor(prim.precursorMeshes[iM]);
-                        umesh.name = meshName;
-                        prim.unityMeshes.Add(umesh);
-                        result.meshes.Add(umesh);
-                        yield return null;
+
+                        if (registeredNative.ContainsKey(result) && registeredNative[result] != null)
+                        {
+                            Mesh.ApplyAndDisposeWritableMeshData(meshDataArray, prim.unityMeshes, MeshUpdateFlags.DontRecalculateBounds | MeshUpdateFlags.DontValidateIndices | MeshUpdateFlags.DontNotifyMeshUsers);
+                        }
+
+                        disposed = true;
                     }
+                    finally
+                    {
+                        if (!disposed)
+                        {
+                            meshDataArray.Dispose();
+                        }
+
+                        registeredNative.Remove(result);
+                    }
+
+                    yield return null;
                 }
 
                 // Unity meshes may not have > 2^16 verts. Having to break the
@@ -784,29 +857,252 @@ namespace TiltBrushToolkit
             }
         }
 
-        static Mesh UnityFromPrecursor(MeshPrecursor precursor)
+        //static void UnityFromPrecursorOld(Mesh mesh, MeshPrecursor precursor)
+        //{
+        //    mesh.vertices = precursor.vertices;
+        //    if (precursor.normals != null) { mesh.normals = precursor.normals; }
+        //    if (precursor.colors != null) { mesh.colors = precursor.colors; }
+        //    if (precursor.colors32 != null) { mesh.colors32 = precursor.colors32; }
+        //    if (precursor.tangents != null) { mesh.tangents = precursor.tangents; }
+        //    for (int i = 0; i < precursor.uvSets.Length; ++i)
+        //    {
+        //        if (precursor.uvSets[i] != null)
+        //        {
+        //            GenericSetUv(mesh, i, precursor.uvSets[i]);
+        //        }
+        //    }
+        //    mesh.triangles = precursor.triangles;
+
+        //    if (precursor.normals == null)
+        //    {
+        //        mesh.RecalculateNormals();
+        //    }
+        //}
+
+        static void UnityFromPrecursorNew(ref Bounds meshBounds, Mesh.MeshData meshData, MeshPrecursor precursor, ref string error)
         {
-            var mesh = new Mesh();
-
-            mesh.vertices = precursor.vertices;
-            if (precursor.normals != null) { mesh.normals = precursor.normals; }
-            if (precursor.colors != null) { mesh.colors = precursor.colors; }
-            if (precursor.colors32 != null) { mesh.colors32 = precursor.colors32; }
-            if (precursor.tangents != null) { mesh.tangents = precursor.tangents; }
-            for (int i = 0; i < precursor.uvSets.Length; ++i)
+            try
             {
-                if (precursor.uvSets[i] != null)
+                List<VertexAttributeDescriptor> descriptors = new List<VertexAttributeDescriptor>();
+                descriptors.Add(new VertexAttributeDescriptor(VertexAttribute.Position, VertexAttributeFormat.Float32, 3));
+                int vertexLength = 3;
+                int normalsOffset = vertexLength;
+                if (precursor.normals != null)
                 {
-                    GenericSetUv(mesh, i, precursor.uvSets[i]);
+                    vertexLength += 3;
+                    descriptors.Add(new VertexAttributeDescriptor(VertexAttribute.Normal));
                 }
-            }
-            mesh.triangles = precursor.triangles;
 
-            if (precursor.normals == null)
-            {
-                mesh.RecalculateNormals();
+                int tangentsOffset = vertexLength;
+                if (precursor.tangents != null)
+                {
+                    vertexLength += 4;
+                    descriptors.Add(new VertexAttributeDescriptor(VertexAttribute.Tangent, VertexAttributeFormat.Float32, 4));
+                }
+
+                int colorsOffset = vertexLength;
+                if (precursor.colors32 != null || precursor.colors != null)
+                {
+                    vertexLength += 4;
+                    descriptors.Add(new VertexAttributeDescriptor(VertexAttribute.Color, VertexAttributeFormat.Float32, 4));
+                }
+
+                int uvOffset = vertexLength;
+                for (int i = 0; i < precursor.uvSets.Length; ++i)
+                {
+                    if (precursor.uvSets[i] != null)
+                    {
+                        var array = precursor.uvSets[i];
+                        int dimension = 2;
+                        vertexLength += 2;
+                        if (array is Vector3[])
+                        {
+                            vertexLength += 1;
+                            dimension = 3;
+                        }
+                        else if (array is Vector4[])
+                        {
+                            vertexLength += 2;
+                            dimension = 4;
+                        }
+
+                        if (i == 0)
+                        {
+                            descriptors.Add(new VertexAttributeDescriptor(VertexAttribute.TexCoord0, VertexAttributeFormat.Float32, dimension));
+                        }
+                        else if (i == 1)
+                        {
+                            descriptors.Add(new VertexAttributeDescriptor(VertexAttribute.TexCoord1, VertexAttributeFormat.Float32, dimension));
+                        }
+                        else if (i == 2)
+                        {
+                            descriptors.Add(new VertexAttributeDescriptor(VertexAttribute.TexCoord2, VertexAttributeFormat.Float32, dimension));
+                        }
+                        else if (i == 3)
+                        {
+                            descriptors.Add(new VertexAttributeDescriptor(VertexAttribute.TexCoord3, VertexAttributeFormat.Float32, dimension));
+                        }
+                        else if (i == 4)
+                        {
+                            descriptors.Add(new VertexAttributeDescriptor(VertexAttribute.TexCoord4, VertexAttributeFormat.Float32, dimension));
+                        }
+                        else if (i == 5)
+                        {
+                            descriptors.Add(new VertexAttributeDescriptor(VertexAttribute.TexCoord5, VertexAttributeFormat.Float32, dimension));
+                        }
+                        else if (i == 6)
+                        {
+                            descriptors.Add(new VertexAttributeDescriptor(VertexAttribute.TexCoord6, VertexAttributeFormat.Float32, dimension));
+                        }
+                        else if (i == 7)
+                        {
+                            descriptors.Add(new VertexAttributeDescriptor(VertexAttribute.TexCoord7, VertexAttributeFormat.Float32, dimension));
+                        }
+                    }
+                }
+
+                // set vertices.
+                meshData.SetVertexBufferParams(precursor.vertices.Length, descriptors.ToArray());
+                var vectorData = meshData.GetVertexData<float>();
+                bool first = true;
+                Vector3 lowestPoint = Vector3.zero;
+                Vector3 highestPoint = Vector3.zero;
+                for (int i = 0; i < precursor.vertices.Length; i++)
+                {
+                    int index = i * vertexLength;
+                    var vert = precursor.vertices[i];
+                    vectorData[index] = vert.x;
+                    vectorData[index + 1] = vert.y;
+                    vectorData[index + 2] = vert.z;
+                    if (first)
+                    {
+                        lowestPoint = vert;
+                        highestPoint = vert;
+                        first = false;
+                    }
+                    else
+                    {
+                        lowestPoint = new Vector3(Mathf.Min(lowestPoint.x, vert.x), Mathf.Min(lowestPoint.y, vert.y), Mathf.Min(lowestPoint.z, vert.z));
+                        highestPoint = new Vector3(Mathf.Max(highestPoint.x, vert.x), Mathf.Max(highestPoint.y, vert.y), Mathf.Max(highestPoint.z, vert.z));
+                    }
+                }
+
+                // set triangles.
+                meshData.SetIndexBufferParams(precursor.triangles.Length, IndexFormat.UInt32);
+                var indices = meshData.GetIndexData<uint>();
+                for (int i = 0; i < indices.Length; ++i)
+                {
+                    indices[i] = (uint)precursor.triangles[i];
+                }
+
+                // if there are normals set them.
+                if (precursor.normals != null)
+                {
+                    for (int i = 0; i < precursor.normals.Length; i++)
+                    {
+                        int index = (i * vertexLength) + normalsOffset;
+                        vectorData[index] = precursor.normals[i].x;
+                        vectorData[index + 1] = precursor.normals[i].y;
+                        vectorData[index + 2] = precursor.normals[i].z;
+                    }
+                }
+
+                // if there are colors set them too.
+                if (precursor.colors != null)
+                {
+                    for (int i = 0; i < precursor.colors.Length; i++)
+                    {
+                        int index = (i * vertexLength) + colorsOffset;
+                        vectorData[index] = precursor.colors[i].r;
+                        vectorData[index + 1] = precursor.colors[i].g;
+                        vectorData[index + 2] = precursor.colors[i].b;
+                        vectorData[index + 3] = precursor.colors[i].a;
+                    }
+                }
+                else if (precursor.colors32 != null)
+                {
+                    for (int i = 0; i < precursor.colors32.Length; i++)
+                    {
+                        int index = (i * vertexLength) + colorsOffset;
+                        vectorData[index] = precursor.colors32[i].r / 255.0f;
+                        vectorData[index + 1] = precursor.colors32[i].g / 255.0f;
+                        vectorData[index + 2] = precursor.colors32[i].b / 255.0f;
+                        vectorData[index + 3] = precursor.colors32[i].a / 255.0f;
+                    }
+                }
+
+                // tangents setup
+                if (precursor.tangents != null)
+                {
+                    for (int i = 0; i < precursor.tangents.Length; i++)
+                    {
+                        int index = (i * vertexLength) + tangentsOffset;
+                        vectorData[index] = precursor.tangents[i].x;
+                        vectorData[index + 1] = precursor.tangents[i].y;
+                        vectorData[index + 2] = precursor.tangents[i].z;
+                        vectorData[index + 3] = precursor.tangents[i].w;
+                    }
+                }
+
+                // uv setup
+                for (int i = 0; i < precursor.uvSets.Length; ++i)
+                {
+                    if (precursor.uvSets[i] != null)
+                    {
+                        var array = precursor.uvSets[i];
+                        if (array is Vector2[])
+                        {
+                            var vec2 = (Vector2[])array;
+                            for (int j = 0; j < vec2.Length; j++)
+                            {
+                                int index = (j * vertexLength) + uvOffset;
+                                vectorData[index] = vec2[j].x;
+                                vectorData[index + 1] = vec2[j].y;
+                            }
+                            
+                            uvOffset += 2;
+                        }
+                        else if (array is Vector3[])
+                        {
+                            var vec3 = (Vector3[])array;
+                            for (int j = 0; j < vec3.Length; j++)
+                            {
+                                int index = (j * vertexLength) + uvOffset;
+                                vectorData[index] = vec3[j].x;
+                                vectorData[index + 1] = vec3[j].y;
+                                vectorData[index + 2] = vec3[j].z;
+                            }
+
+                            uvOffset += 3;
+                        }
+                        else if (array is Vector4[])
+                        {
+                            var vec4 = (Vector4[])array;
+                            for (int j = 0; j < vec4.Length; j++)
+                            {
+                                int index = (j * vertexLength) + uvOffset;
+                                vectorData[index] = vec4[j].x;
+                                vectorData[index + 1] = vec4[j].y;
+                                vectorData[index + 2] = vec4[j].z;
+                                vectorData[index + 3] = vec4[j].w;
+                            }
+
+                            uvOffset += 4;
+                        }
+                    }
+                }
+
+                meshData.subMeshCount = 1;
+                var descriptor = new SubMeshDescriptor(0, precursor.triangles.Length);
+                var center = (lowestPoint + highestPoint) / 2;
+                descriptor.bounds = new Bounds(center, (highestPoint - lowestPoint));
+                meshBounds = new Bounds(center, (highestPoint - lowestPoint));
+                meshData.SetSubMesh(0, descriptor, MeshUpdateFlags.DontValidateIndices | MeshUpdateFlags.DontRecalculateBounds | MeshUpdateFlags.DontNotifyMeshUsers);
             }
-            return mesh;
+            catch(Exception exc)
+            {
+                error = exc.ToString();
+            }
         }
 
         struct MeshSubset
@@ -1040,23 +1336,20 @@ namespace TiltBrushToolkit
                 return null;
             }
 
-            asyncController.ExecuteOnMainThreadSync(() =>
+            BrushDescriptor desc = GltfMaterialConverter.LookupBrushDescriptor(prim.MaterialPtr);
+            if (desc != null)
             {
-                BrushDescriptor desc = GltfMaterialConverter.LookupBrushDescriptor(prim.MaterialPtr);
-                if (desc != null)
+                if (desc.m_bFbxExportNormalAsTexcoord1)
                 {
-                    if (desc.m_bFbxExportNormalAsTexcoord1)
-                    {
-                        // Because of historical compat issues with fbx, some TBT shaders are slightly different
-                        // from TB's shaders; they read from TEXCOORD1 instead of NORMAL, and there is a
-                        // corresponding data change.
-                        // - For fbx we move NORMAL -> TEXCOORD1 at export time.
-                        // - For gltf we are moving NORMAL -> TEXCOORD1 at import time.
-                        // If we ever fix our TBT shaders to not be different from TB shaders, we can skip this.
-                        prim.ReplaceAttribute("NORMAL", "TEXCOORD_1");
-                    }
+                    // Because of historical compat issues with fbx, some TBT shaders are slightly different
+                    // from TB's shaders; they read from TEXCOORD1 instead of NORMAL, and there is a
+                    // corresponding data change.
+                    // - For fbx we move NORMAL -> TEXCOORD1 at export time.
+                    // - For gltf we are moving NORMAL -> TEXCOORD1 at import time.
+                    // If we ever fix our TBT shaders to not be different from TB shaders, we can skip this.
+                    prim.ReplaceAttribute("NORMAL", "TEXCOORD_1");
                 }
-            });
+            }
 
             int numVerts = prim.GetAttributePtr("POSITION").count;
 

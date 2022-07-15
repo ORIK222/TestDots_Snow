@@ -4,9 +4,8 @@
 Material:
   serializedVersion: 6
   m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 0}
   m_Name: Bubbles
   m_Shader: {fileID: 4800000, guid: ecfbf36005cdcc94d881047728719bd8, type: 3}
   m_ShaderKeywords: _EMISSION
@@ -76,7 +75,6 @@ Material:
     - _SmoothnessTextureChannel: 0
     - _SparkleRate: 2.5
     - _SpecularHighlights: 1
-    - _SpreadRate: 1.75
     - _SpreadSize: 1.25
     - _SrcBlend: 1
     - _UVSec: 0
@@ -89,4 +87,3 @@ Material:
     - _SpecColor: {r: 0.5, g: 0.5, b: 0.5, a: 0}
     - _TintColor: {r: 1, g: 1, b: 1, a: 1}
     - _WaveformIntensity: {r: 0, g: 15, b: 0, a: 0}
-  m_BuildTextureStacks: []

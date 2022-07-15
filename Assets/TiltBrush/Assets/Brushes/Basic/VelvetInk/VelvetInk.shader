@@ -15,7 +15,6 @@
 Shader "Brush/Special/VelvetInk" {
 Properties {
   _MainTex ("Texture", 2D) = "white" {}
-  _Shininess ("Shininess", Range (0.01, 1)) = 0.078125
 }
 
 Category {
@@ -28,42 +27,30 @@ Category {
   SubShader {
     Pass {
 
-      HLSLPROGRAM
+      CGPROGRAM
       #pragma vertex vert
       #pragma fragment frag
-      #pragma exclude_renderers gles gles3 glcore
-      #pragma target 4.5
-      #pragma multi_compile_instancing
-      #pragma instancing_options renderinglayer
-      #pragma multi_compile _ DOTS_INSTANCING_ON
-      #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
-      
-CBUFFER_START(UnityPerMaterial)
+      #pragma multi_compile __ AUDIO_REACTIVE
+      #pragma multi_compile __ TBT_LINEAR_TARGET
+      #include "UnityCG.cginc"
+      #include "../../../Shaders/Include/Brush.cginc"
+
       sampler2D _MainTex;
-      float4 _MainTex_ST;
-      float _Shininess;
-      CBUFFER_END
-      #ifdef UNITY_DOTS_INSTANCING_ENABLED  
-                UNITY_DOTS_INSTANCING_START(MaterialPropertyMetadata)
-                    UNITY_DOTS_INSTANCED_PROP(float, _Shininess)
-                UNITY_DOTS_INSTANCING_END(MaterialPropertyMetadata)
-            #define _Shininess UNITY_ACCESS_DOTS_INSTANCED_PROP_WITH_DEFAULT(float, _Shininess)
-      #endif
 
       struct appdata_t {
         float4 vertex : POSITION;
-        half4 color : COLOR;
+        fixed4 color : COLOR;
         float3 normal : NORMAL;
         float2 texcoord : TEXCOORD0;
       };
 
       struct v2f {
         float4 vertex : SV_POSITION;
-        half4 color : COLOR;
+        fixed4 color : COLOR;
         float2 texcoord : TEXCOORD0;
       };
 
-
+      float4 _MainTex_ST;
 
       v2f vert (appdata_t v)
       {
@@ -71,19 +58,25 @@ CBUFFER_START(UnityPerMaterial)
         v2f o;
 
         o.texcoord = TRANSFORM_TEX(v.texcoord,_MainTex);
-
-        o.color = v.color;
-        o.vertex = TransformObjectToHClip(v.vertex.xyz);
+#ifdef AUDIO_REACTIVE
+        v.color = TbVertToSrgb(v.color);
+        o.color = musicReactiveColor(v.color, _BeatOutput.w);
+        v.vertex = musicReactiveAnimation(v.vertex, v.color, _BeatOutput.w, o.texcoord.x);
+        o.color = SrgbToNative(o.color);
+#else
+        o.color = TbVertToNative(v.color);
+#endif
+        o.vertex = UnityObjectToClipPos(v.vertex);
 
         return o;
       }
 
-      half4 frag (v2f i) : SV_Target
+      fixed4 frag (v2f i) : SV_Target
       {
-        half4 c = tex2D(_MainTex , i.texcoord );
+         half4 c = tex2D(_MainTex, i.texcoord );
         return i.color * c;
       }
-      ENDHLSL
+      ENDCG
     }
   }
 }

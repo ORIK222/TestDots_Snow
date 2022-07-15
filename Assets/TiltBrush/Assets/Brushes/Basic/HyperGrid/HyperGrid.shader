@@ -29,36 +29,34 @@ Category {
   SubShader {
     Pass {
 
-      HLSLPROGRAM
+      CGPROGRAM
       #pragma vertex vert
       #pragma fragment frag
-          #pragma exclude_renderers gles gles3 glcore
-      #pragma target 4.5
-      #pragma multi_compile_instancing
-      #pragma instancing_options renderinglayer
-      #pragma multi_compile _ DOTS_INSTANCING_ON
-      #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
-      #include "../../../Shaders/Include/Brush.hlsl"
-      
-CBUFFER_START(UnityPerMaterial)
+      #pragma target 3.0
+      #pragma glsl
+      #pragma multi_compile __ AUDIO_REACTIVE
+      #pragma multi_compile __ TBT_LINEAR_TARGET
+      #include "UnityCG.cginc"
+      #include "../../../Shaders/Include/Brush.cginc"
+      #include "Assets/ThirdParty/Noise/Shaders/Noise.cginc"
+
       sampler2D _MainTex;
-      half4 _TintColor;
-      float4 _MainTex_ST;
-      CBUFFER_END
+      fixed4 _TintColor;
+
       struct appdata_t {
         float4 vertex : POSITION;
-        half4 color : COLOR;
+        fixed4 color : COLOR;
         float2 texcoord : TEXCOORD0;
         float4 texcoord1 : TEXCOORD1;
       };
 
       struct v2f {
         float4 vertex : SV_POSITION;
-        half4 color : COLOR;
+        fixed4 color : COLOR;
         float2 texcoord : TEXCOORD0;
       };
 
-
+      float4 _MainTex_ST;
 
       v2f vert (appdata_t v)
       {
@@ -74,13 +72,18 @@ CBUFFER_START(UnityPerMaterial)
         float lifetime = _Time.y - v.texcoord1.w;
         float size = length(v.texcoord1.xyz);
         float release = saturate(lifetime);
+
+#ifdef AUDIO_REACTIVE
+        worldPos.y -= release * fmod(_BeatOutputAccum.x - v.texcoord1.w, 5);
+        worldPos.y += .3 * release * pow(sin(_BeatOutputAccum.x * 2 + worldPos.x),5);
+#endif
         // Quantize vertices
         float q = (1.0f / size) * .5;
         q += 5 * saturate(1- release*10);
         float3 quantPos = ceil(worldPos.xyz * q) / q;
         worldPos.xyz = quantPos;
         worldPos = mul(xf_CS, worldPos);
-        o.vertex = v.texcoord1;
+        o.vertex = mul(UNITY_MATRIX_VP,  worldPos);
 
         o.color = 2 * v.color + v.color.yzxw * _BeatOutput.x;
         o.texcoord = TRANSFORM_TEX(v.texcoord,_MainTex);
@@ -88,14 +91,14 @@ CBUFFER_START(UnityPerMaterial)
       }
 
       // Input color is srgb
-      half4 frag (v2f i) : SV_Target
+      fixed4 frag (v2f i) : SV_Target
       {
         float4 c = i.color * _TintColor * tex2D(_MainTex, i.texcoord);
         c = float4(c.rgb * c.a, 1.0);
         c = SrgbToNative(c);
         return c;
       }
-      ENDHLSL
+      ENDCG
     }
   }
 }

@@ -29,47 +29,41 @@ Category {
   SubShader {
     Pass {
 
-      HLSLPROGRAM
+      CGPROGRAM
       #pragma vertex vert
       #pragma fragment frag
-      #pragma exclude_renderers gles gles3 glcore
-      #pragma target 4.5
-      #pragma multi_compile_instancing
-      #pragma instancing_options renderinglayer
-      #pragma multi_compile _ DOTS_INSTANCING_ON
-      #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
-      #include "../../../Shaders/Include/Brush.hlsl"
+      #pragma multi_compile __ TBT_LINEAR_TARGET
+      #include "UnityCG.cginc"
+      #include "../../../Shaders/Include/Brush.cginc"
 
-CBUFFER_START(UnityPerMaterial)
       sampler2D _MainTex;
       uniform float _Cutoff;
-      float4 _MainTex_ST;
-CBUFFER_END
       struct appdata_t {
         float4 vertex : POSITION;
-        half4 color : COLOR;
+        fixed4 color : COLOR;
         float3 normal : NORMAL;
         float2 texcoord : TEXCOORD0;
       };
 
       struct v2f {
         float4 vertex : SV_POSITION;
-        half4 color : COLOR;
+        fixed4 color : COLOR;
         float2 texcoord : TEXCOORD0;
       };
 
+      float4 _MainTex_ST;
 
       v2f vert (appdata_t v)
       {
 
         v2f o;
-        o.vertex = TransformObjectToHClip(v.vertex.xyz);
+        o.vertex = UnityObjectToClipPos(v.vertex);
         o.texcoord = TRANSFORM_TEX(v.texcoord,_MainTex);
         o.color = TbVertToNative(v.color);
         return o;
       }
 
-      half4 frag (v2f i) : SV_Target
+      fixed4 frag (v2f i) : SV_Target
       {
          half4 c = tex2D(_MainTex, i.texcoord );
 
@@ -78,7 +72,7 @@ CBUFFER_END
 
         return i.color * float4(c.rgb,1);
       }
-      ENDHLSL
+      ENDCG
     }
   }
 }

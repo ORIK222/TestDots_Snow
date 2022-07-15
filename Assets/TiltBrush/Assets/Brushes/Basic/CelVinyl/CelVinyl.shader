@@ -26,24 +26,20 @@ Shader "Brush/Special/CelVinyl" {
       Lighting Off
       Cull Off
 
-      HLSLPROGRAM
+      CGPROGRAM
         #pragma vertex vert
         #pragma fragment frag
-      #pragma exclude_renderers gles gles3 glcore
-      #pragma target 4.5
-      #pragma multi_compile_instancing
-      #pragma instancing_options renderinglayer
-      #pragma multi_compile _ DOTS_INSTANCING_ON
-      #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
-      #include "../../../Shaders/Include/Brush.hlsl"
-
+        #pragma multi_compile __ TBT_LINEAR_TARGET
+        #pragma multi_compile_fog
+        #include "../../../Shaders/Include/Brush.cginc"
+        #include "UnityCG.cginc"
         #pragma target 3.0
-CBUFFER_START(UnityPerMaterial)
+
         sampler2D _MainTex;
         float4 _MainTex_ST;
-        half4 _Color;
+        fixed4 _Color;
         float _Cutoff;
-      CBUFFER_END
+
         struct appdata_t {
             float4 vertex : POSITION;
             float2 texcoord : TEXCOORD0;
@@ -54,6 +50,7 @@ CBUFFER_START(UnityPerMaterial)
             float4 vertex : SV_POSITION;
             float2 texcoord : TEXCOORD0;
             float4 color : COLOR;
+            UNITY_FOG_COORDS(1)
         };
 
         v2f vert (appdata_t v)
@@ -61,22 +58,26 @@ CBUFFER_START(UnityPerMaterial)
 
           v2f o;
 
-          o.vertex = TransformObjectToHClip(v.vertex.xyz);
+          o.vertex = UnityObjectToClipPos(v.vertex);
           o.texcoord = v.texcoord;
           o.color = TbVertToNative(v.color);
+          UNITY_TRANSFER_FOG(o, o.vertex);
           return o;
         }
 
-        half4 frag (v2f i) : SV_Target
+        fixed4 frag (v2f i) : SV_Target
         {
-          half4 tex = tex2D(_MainTex, i.texcoord) * i.color;
+          fixed4 tex = tex2D(_MainTex, i.texcoord) * i.color;
+          UNITY_APPLY_FOG(i.fogCoord, tex);
+
+          // Discard transparent pixels.
           if (tex.a < _Cutoff) {
             discard;
           }
           return tex;
         }
 
-      ENDHLSL
+      ENDCG
     }
   }
 

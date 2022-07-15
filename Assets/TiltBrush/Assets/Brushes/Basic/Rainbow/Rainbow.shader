@@ -1,4 +1,4 @@
-  // Copyright 2017 Google Inc.
+// Copyright 2017 Google Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,43 +28,40 @@ Category {
   SubShader {
     Pass {
 
-      HLSLPROGRAM
+      CGPROGRAM
       #pragma vertex vert
       #pragma fragment frag
-      #pragma exclude_renderers gles gles3 glcore
-      #pragma target 4.5
-      #pragma multi_compile_instancing
-      #pragma instancing_options renderinglayer
-      #pragma multi_compile _ DOTS_INSTANCING_ON
-      #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
-      #include "../../../Shaders/Include/Brush.hlsl"
-      
-CBUFFER_START(UnityPerMaterial)
+      #pragma multi_compile __ AUDIO_REACTIVE
+      #pragma multi_compile __ TBT_LINEAR_TARGET
+
+      #pragma target 3.0
+      #include "UnityCG.cginc"
+      #include "../../../Shaders/Include/Brush.cginc"
+
       sampler2D _MainTex;
-      float4 _MainTex_ST;
-      half _EmissionGain;
-      CBUFFER_END
+
       struct appdata_t {
         float4 vertex : POSITION;
-        half4 color : COLOR;
+        fixed4 color : COLOR;
         float3 normal : NORMAL;
         float2 texcoord : TEXCOORD0;
       };
 
       struct v2f {
         float4 vertex : SV_POSITION;
-        half4 color : COLOR;
+        fixed4 color : COLOR;
         float2 texcoord : TEXCOORD0;
       };
 
-
+      float4 _MainTex_ST;
+      half _EmissionGain;
 
       v2f vert (appdata_t v)
       {
         v.color = TbVertToSrgb(v.color);
 
         v2f o;
-        o.vertex = TransformObjectToHClip(v.vertex.xyz);
+        o.vertex = UnityObjectToClipPos(v.vertex);
         o.texcoord = TRANSFORM_TEX(v.texcoord,_MainTex);
         o.color = v.color;
         return o;
@@ -156,17 +153,22 @@ CBUFFER_START(UnityPerMaterial)
       }
 
       // Input color is srgb
-      half4 frag (v2f i) : SV_Target
+      fixed4 frag (v2f i) : SV_Target
       {
         i.color.a = 1; //ignore incoming vert alpha
-
+#ifdef AUDIO_REACTIVE
+        float4 tex =  GetAudioReactiveRainbowColor(i.texcoord.xy);
+        tex *= GetAudioReactiveColor(i.texcoord.xy);
+        tex = i.color * tex * exp(_EmissionGain * 2.5f);
+#else
         float4 tex =  GetRainbowColor(i.texcoord.xy);
         tex = i.color * tex * exp(_EmissionGain * 3.0f);
+#endif
         float4 color = float4(tex.rgb * tex.a, 1.0);
         color = SrgbToNative(color);
         return color;
       }
-      ENDHLSL
+      ENDCG
     }
   }
 }

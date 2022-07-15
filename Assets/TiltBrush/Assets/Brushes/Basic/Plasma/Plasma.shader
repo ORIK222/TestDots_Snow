@@ -37,28 +37,22 @@ Category {
   SubShader {
     Pass {
 
-      HLSLPROGRAM
+      CGPROGRAM
       #pragma vertex vert
       #pragma fragment frag
-      #pragma exclude_renderers gles gles3 glcore
-      #pragma target 4.5
-      #pragma multi_compile_instancing
-      #pragma instancing_options renderinglayer
-      #pragma multi_compile _ DOTS_INSTANCING_ON
-      #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
-CBUFFER_START(UnityPerMaterial)
+      #pragma target 3.0
+      #pragma multi_compile_particles
+      #pragma multi_compile __ AUDIO_REACTIVE
+      #pragma multi_compile __ TBT_LINEAR_TARGET
+
+      #include "UnityCG.cginc"
+      #include "../../../Shaders/Include/Brush.cginc"
+
       sampler2D _MainTex;
-      float4 _MainTex_ST;
-      half _Scroll1;
-      half _Scroll2;
-      half _EmissionScroll1;
-      half _EmissionScroll2;
-      half _DisplacementIntensity;
-      half _EmissionGain;
-      CBUFFER_END
+
       struct appdata_t {
         float4 vertex : POSITION;
-        half4 color : COLOR;
+        fixed4 color : COLOR;
         float3 normal : NORMAL;
         float2 texcoord : TEXCOORD0;
 
@@ -66,19 +60,25 @@ CBUFFER_START(UnityPerMaterial)
 
       struct v2f {
         float4 vertex : SV_POSITION;
-        half4 color : COLOR;
+        fixed4 color : COLOR;
         float2 texcoord : TEXCOORD0;
         float3 worldPos : TEXCOORD1;
       };
 
-
+      float4 _MainTex_ST;
+      fixed _Scroll1;
+      fixed _Scroll2;
+      fixed _EmissionScroll1;
+      fixed _EmissionScroll2;
+      half _DisplacementIntensity;
+      half _EmissionGain;
 
       v2f vert (appdata_t v)
       {
 
         v2f o;
-        o.worldPos = mul(unity_ObjectToWorld, v.vertex).xyz;
-        o.vertex = TransformObjectToHClip(v.vertex.xyz);
+        o.worldPos = mul(unity_ObjectToWorld, v.vertex);
+        o.vertex = UnityObjectToClipPos(v.vertex);
         o.color = v.color;
         o.texcoord = TRANSFORM_TEX(v.texcoord,_MainTex);
         return o;
@@ -90,7 +90,7 @@ CBUFFER_START(UnityPerMaterial)
         return abs(noise.x + noise.y) * 0.5;
       }
 
-      half4 frag (v2f i) : SV_Target
+      fixed4 frag (v2f i) : SV_Target
       {
         // Workaround for b/30500118, caused by b/30504121
         i.color.a = saturate(i.color.a);
@@ -102,6 +102,15 @@ CBUFFER_START(UnityPerMaterial)
         half3 bRate = half3(1.5 , 3.0, 2.25) + M * aRate;
         half3 LINE_POS = 0.5;
         half3 LINE_WIDTH = .012;
+
+#ifdef AUDIO_REACTIVE
+        float waveformcoord = i.texcoord.x * .2f;
+        float envelope = sin(3.14159 * waveformcoord);
+        float waveform = (tex2D(_WaveFormTex, float2(waveformcoord,0)).r - .5f);
+        i.texcoord.y += waveform * envelope * .5f;
+#endif
+
+        // Calculate uvs for each line
         half3 us, vs;
         {
           us = A * i.texcoord.x - aRate * _Time.y;
@@ -128,7 +137,7 @@ CBUFFER_START(UnityPerMaterial)
         return float4(c.rgb * c.a, 1.0);
       }
 
-      ENDHLSL
+      ENDCG
     }
   }
 }

@@ -16,49 +16,33 @@ Shader "Brush/Special/Toon" {
 Properties {
   _MainTex ("Base (RGB) Trans (A)", 2D) = "white" {}
   _OutlineMax("Maximum outline size", Range(0, .5)) = .005
-  _Shininess ("Shininess", Range (0.01, 1)) = 0.078125
 }
 
-HLSLINCLUDE
-            #pragma exclude_renderers gles gles3 glcore
-            #pragma target 4.5
-            #pragma multi_compile_instancing
-            #pragma instancing_options renderinglayer
-            #pragma multi_compile _ DOTS_INSTANCING_ON
-            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
-
-CBUFFER_START(UnityPerMaterial)
+CGINCLUDE
+  #include "UnityCG.cginc"
+  #include "../../../Shaders/Include/Brush.cginc"
+  #include "Assets/ThirdParty/Noise/Shaders/Noise.cginc"
+  #pragma multi_compile __ AUDIO_REACTIVE
+  #pragma multi_compile __ TBT_LINEAR_TARGET
+  #pragma multi_compile_fog
+  #pragma target 3.0
   sampler2D _MainTex;
   float4 _MainTex_ST;
   float _OutlineMax;
-  float _Shininess;
-CBUFFER_END
-            #ifdef UNITY_DOTS_INSTANCING_ENABLED  
-                UNITY_DOTS_INSTANCING_START(MaterialPropertyMetadata)
-                    UNITY_DOTS_INSTANCED_PROP(float, _Shininess)
-                UNITY_DOTS_INSTANCING_END(MaterialPropertyMetadata)
-                #define _Shininess UNITY_ACCESS_DOTS_INSTANCED_PROP_WITH_DEFAULT(float, _Shininess)
-            #endif
 
-struct appdata_t {
+  struct appdata_t {
     float4 vertex : POSITION;
-    half4 color : COLOR;
+    fixed4 color : COLOR;
     float3 normal : NORMAL;
     float3 texcoord : TEXCOORD0;
   };
 
   struct v2f {
     float4 vertex : SV_POSITION;
-    half4 color : COLOR;
+    fixed4 color : COLOR;
     float2 texcoord : TEXCOORD0;
+    UNITY_FOG_COORDS(1)
   };
-
-  // Transforms position from object space to homogenous space
-  float4 TransformObjectToHClip(float4 positionOS)
-  {
-      // More efficient than computing M*VP matrix product
-      return mul(GetWorldToHClipMatrix(), mul(GetObjectToWorldMatrix(), positionOS));
-  }
 
   v2f vertInflate (appdata_t v, float inflate)
   {
@@ -68,15 +52,21 @@ struct appdata_t {
     float radius = v.texcoord.z;
     inflate *= radius * .4;
     float bulge = 0.0;
-	float3 worldNormal = TransformObjectToWorldNormal(v.normal);
+	float3 worldNormal = UnityObjectToWorldNormal(v.normal);
+
+#ifdef AUDIO_REACTIVE
+    float fft = tex2Dlod(_FFTTex, float4(_BeatOutputAccum.z*.25 + v.texcoord.x, 0,0,0)).g;
+    bulge = fft * radius * 10.0;
+#endif
+
     //
     // Careful: perspective projection is non-afine, so math assumptions may not be valid here.
     //
 
     // Technically these are not yet in NDC because they haven't been divided by W, so their
     // range is currently [-W, W].
-    o.vertex = TransformObjectToHClip(float4(v.vertex.xyz + v.normal.xyz * bulge, v.vertex.w).xyz);
-    float4 outline_NDC = TransformObjectToHClip(float4(v.vertex.xyz + v.normal.xyz * inflate, v.vertex.w).xyz);
+    o.vertex = UnityObjectToClipPos(float4(v.vertex.xyz + v.normal.xyz * bulge, v.vertex.w));
+    float4 outline_NDC = UnityObjectToClipPos(float4(v.vertex.xyz + v.normal.xyz * inflate, v.vertex.w));
 
     // Displacement in proper NDC coords (e.g. [-1, 1])
     float3 disp = outline_NDC.xyz / outline_NDC.w - o.vertex.xyz / o.vertex.w;
@@ -102,11 +92,13 @@ struct appdata_t {
         o.color.xyz += worldNormal.y *.2;
         o.color.xyz = max(0, o.color.xyz);
         o.texcoord = TRANSFORM_TEX(v.texcoord,_MainTex);
+    UNITY_TRANSFER_FOG(o, o.vertex);
         return o;
   }
 
   v2f vert (appdata_t v)
   {
+    v.color = TbVertToNative(v.color);
     return vertInflate(v,0);
   }
 
@@ -116,18 +108,21 @@ struct appdata_t {
     return vertInflate(v, 1.0);
   }
 
-  half4 fragBlack (v2f i) : SV_Target
+  fixed4 fragBlack (v2f i) : SV_Target
   {
     float4 color = float4(0,0,0,1);
+    UNITY_APPLY_FOG(i.fogCoord, color);
     return color;
   }
 
-  half4 fragColor (v2f i) : SV_Target
+  fixed4 fragColor (v2f i) : SV_Target
   {
+    UNITY_APPLY_FOG(i.fogCoord, i.color);
     return i.color;
   }
 
-ENDHLSL
+ENDCG
+
 
 
 SubShader {
@@ -135,18 +130,18 @@ SubShader {
   //   GltfCull Back
   Cull Back
   Pass{
-    HLSLPROGRAM
+    CGPROGRAM
     #pragma vertex vert
     #pragma fragment fragColor
-    ENDHLSL
+    ENDCG
     }
 
   Cull Front
   Pass{
-    HLSLPROGRAM
+    CGPROGRAM
     #pragma vertex vertEdge
     #pragma fragment fragBlack
-    ENDHLSL
+    ENDCG
     }
   }
 Fallback "Diffuse"
